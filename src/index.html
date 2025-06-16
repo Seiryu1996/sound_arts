@@ -8,11 +8,22 @@
 </head>
 <body>
     <div class="container">
-        <h1>音楽ビジュアライザー</h1>
-        <button id="startBtn">開始</button>
-        <button id="stopBtn" disabled>停止</button>
+        <h1>Music Visualizer</h1>
+        <div class="controls">
+            <button id="startBtn" class="btn-primary">Start</button>
+            <button id="stopBtn" class="btn-secondary" disabled>Stop</button>
+        </div>
+        <div class="pattern-selector">
+            <label>Pattern:</label>
+            <select id="patternSelect">
+                <option value="minimal">Minimal</option>
+                <option value="organic">Organic</option>
+                <option value="geometric">Geometric</option>
+                <option value="waves">Waves</option>
+            </select>
+        </div>
         <div class="info">
-            <p>マイクへのアクセスを許可してください</p>
+            <p>Grant microphone access to begin</p>
         </div>
     </div>
     <canvas id="visualizer"></canvas>

@@ -6,6 +6,7 @@ class MusicVisualizer {
         this.ctx = this.canvas.getContext('2d');
         this.startBtn = document.getElementById('startBtn');
         this.stopBtn = document.getElementById('stopBtn');
+        this.patternSelect = document.getElementById('patternSelect');
         this.info = document.querySelector('.info p');
         
         this.audioContext = null;
@@ -17,12 +18,18 @@ class MusicVisualizer {
         this.setupCanvas();
         this.bindEvents();
         
-        // ビジュアル効果用の変数
         this.particles = [];
         this.time = 0;
         this.bassHistory = [];
-        this.midHistory = [];
-        this.trebleHistory = [];
+        this.currentPattern = 'minimal';
+        
+        // パターン別設定
+        this.patterns = {
+            minimal: { primaryColor: '#f5f5f5', accentColor: '#666', bgAlpha: 0.15 },
+            organic: { primaryColor: '#e8d5b7', accentColor: '#8b7355', bgAlpha: 0.12 },
+            geometric: { primaryColor: '#d4af37', accentColor: '#b8860b', bgAlpha: 0.1 },
+            waves: { primaryColor: '#4a90e2', accentColor: '#357abd', bgAlpha: 0.08 }
+        };
     }
     
     setupCanvas() {
@@ -38,6 +45,9 @@ class MusicVisualizer {
     bindEvents() {
         this.startBtn.addEventListener('click', () => this.start());
         this.stopBtn.addEventListener('click', () => this.stop());
+        this.patternSelect.addEventListener('change', (e) => {
+            this.currentPattern = e.target.value;
+        });
     }
     
     async start() {
@@ -54,12 +64,12 @@ class MusicVisualizer {
             
             this.startBtn.disabled = true;
             this.stopBtn.disabled = false;
-            this.info.textContent = '音楽を再生して音楽ビジュアライザーをお楽しみください！';
+            this.info.textContent = 'Listening to audio...';
             
             this.animate();
         } catch (error) {
-            console.error('マイクアクセスエラー:', error);
-            this.info.textContent = 'マイクへのアクセスが拒否されました。';
+            console.error('Microphone access error:', error);
+            this.info.textContent = 'Microphone access denied.';
         }
     }
     
@@ -73,10 +83,10 @@ class MusicVisualizer {
         
         this.startBtn.disabled = false;
         this.stopBtn.disabled = true;
-        this.info.textContent = 'マイクへのアクセスを許可してください';
+        this.info.textContent = 'Grant microphone access to begin';
         
-        // キャンバスをクリア
-        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        this.ctx.fillStyle = '#0a0a0a';
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     }
     
     animate() {
@@ -84,24 +94,17 @@ class MusicVisualizer {
         
         this.analyser.getByteFrequencyData(this.dataArray);
         
-        // 周波数帯域を分析
         const bass = this.getAverageVolume(0, 8);
         const mid = this.getAverageVolume(8, 64);
-        const treble = this.getAverageVolume(64, 256);
+        const treble = this.getAverageVolume(64, 128);
         
-        // 履歴を保存（平滑化用）
         this.bassHistory.push(bass);
-        this.midHistory.push(mid);
-        this.trebleHistory.push(treble);
-        
-        if (this.bassHistory.length > 10) {
+        if (this.bassHistory.length > 20) {
             this.bassHistory.shift();
-            this.midHistory.shift();
-            this.trebleHistory.shift();
         }
         
         this.draw(bass, mid, treble);
-        this.time += 0.05;
+        this.time += 0.01;
     }
     
     getAverageVolume(start, end) {
@@ -113,159 +116,125 @@ class MusicVisualizer {
     }
     
     draw(bass, mid, treble) {
-        // 背景をクリア（フェード効果）
-        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+        const config = this.patterns[this.currentPattern];
+        
+        this.ctx.fillStyle = `rgba(10, 10, 10, ${config.bgAlpha})`;
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
         
         const centerX = this.canvas.width / 2;
         const centerY = this.canvas.height / 2;
         
-        // 中央の円形ビジュアライザー
-        this.drawCircularVisualizer(centerX, centerY);
-        
-        // 幾何学模様
-        this.drawGeometricPatterns(centerX, centerY, bass, mid, treble);
-        
-        // パーティクル効果
-        this.updateParticles(bass);
-        
-        // 波形表示
-        this.drawWaveform();
+        switch(this.currentPattern) {
+            case 'minimal':
+                this.drawMinimal(centerX, centerY, bass, mid, treble, config);
+                break;
+            case 'organic':
+                this.drawOrganic(centerX, centerY, bass, mid, treble, config);
+                break;
+            case 'geometric':
+                this.drawGeometric(centerX, centerY, bass, mid, treble, config);
+                break;
+            case 'waves':
+                this.drawWaves(centerX, centerY, bass, mid, treble, config);
+                break;
+        }
     }
     
-    drawCircularVisualizer(centerX, centerY) {
-        const radius = 150;
-        const bars = 64;
-        
-        for (let i = 0; i < bars; i++) {
-            const angle = (i / bars) * Math.PI * 2;
-            const amplitude = this.dataArray[i] || 0;
-            const barHeight = amplitude * 2;
+    drawMinimal(centerX, centerY, bass, mid, treble, config) {
+        // シンプルな同心円
+        for (let i = 0; i < 8; i++) {
+            const radius = 40 + i * 30 + bass * 0.3;
+            const alpha = (8 - i) / 8 * 0.6;
             
-            const x1 = centerX + Math.cos(angle) * radius;
-            const y1 = centerY + Math.sin(angle) * radius;
-            const x2 = centerX + Math.cos(angle) * (radius + barHeight);
-            const y2 = centerY + Math.sin(angle) * (radius + barHeight);
-            
-            // カラフルなグラデーション
-            const hue = (i / bars) * 360 + this.time * 50;
-            this.ctx.strokeStyle = `hsl(${hue}, 80%, 60%)`;
-            this.ctx.lineWidth = 3;
-            
+            this.ctx.strokeStyle = config.primaryColor + Math.floor(alpha * 255).toString(16).padStart(2, '0');
+            this.ctx.lineWidth = 1;
             this.ctx.beginPath();
-            this.ctx.moveTo(x1, y1);
-            this.ctx.lineTo(x2, y2);
+            this.ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+            this.ctx.stroke();
+        }
+        
+        // 中央の点
+        this.ctx.fillStyle = config.accentColor;
+        this.ctx.beginPath();
+        this.ctx.arc(centerX, centerY, 2 + bass * 0.05, 0, Math.PI * 2);
+        this.ctx.fill();
+    }
+    
+    drawOrganic(centerX, centerY, bass, mid, treble, config) {
+        // 有機的な曲線
+        this.ctx.strokeStyle = config.primaryColor + '80';
+        this.ctx.lineWidth = 2;
+        
+        for (let layer = 0; layer < 3; layer++) {
+            this.ctx.beginPath();
+            for (let angle = 0; angle < Math.PI * 2; angle += 0.1) {
+                const noise = Math.sin(angle * 3 + this.time * 2) * 20;
+                const audioInfluence = bass * 0.2 + mid * 0.1;
+                const radius = 80 + layer * 40 + noise + audioInfluence;
+                
+                const x = centerX + Math.cos(angle) * radius;
+                const y = centerY + Math.sin(angle) * radius;
+                
+                if (angle === 0) {
+                    this.ctx.moveTo(x, y);
+                } else {
+                    this.ctx.lineTo(x, y);
+                }
+            }
+            this.ctx.closePath();
             this.ctx.stroke();
         }
     }
     
-    drawGeometricPatterns(centerX, centerY, bass, mid, treble) {
-        // 回転する三角形
+    drawGeometric(centerX, centerY, bass, mid, treble, config) {
+        // 多角形パターン
         this.ctx.save();
         this.ctx.translate(centerX, centerY);
-        this.ctx.rotate(this.time + bass * 0.01);
+        this.ctx.rotate(this.time * 0.5);
         
-        const triangleSize = 50 + bass * 0.5;
-        this.ctx.strokeStyle = `hsl(${bass * 2}, 100%, 70%)`;
-        this.ctx.lineWidth = 2;
-        
-        for (let i = 0; i < 6; i++) {
-            this.ctx.rotate(Math.PI / 3);
+        for (let sides = 3; sides <= 8; sides++) {
+            const radius = 40 + sides * 15 + bass * 0.2;
+            const alpha = Math.floor((8 - sides) / 5 * 128).toString(16).padStart(2, '0');
+            
+            this.ctx.strokeStyle = config.primaryColor + alpha;
+            this.ctx.lineWidth = 1;
             this.ctx.beginPath();
-            this.ctx.moveTo(0, -triangleSize);
-            this.ctx.lineTo(-triangleSize * 0.866, triangleSize * 0.5);
-            this.ctx.lineTo(triangleSize * 0.866, triangleSize * 0.5);
-            this.ctx.closePath();
+            
+            for (let i = 0; i <= sides; i++) {
+                const angle = (i / sides) * Math.PI * 2;
+                const x = Math.cos(angle) * radius;
+                const y = Math.sin(angle) * radius;
+                
+                if (i === 0) {
+                    this.ctx.moveTo(x, y);
+                } else {
+                    this.ctx.lineTo(x, y);
+                }
+            }
             this.ctx.stroke();
         }
         
         this.ctx.restore();
-        
-        // 螺旋模様
-        this.drawSpiral(centerX, centerY, mid, treble);
     }
     
-    drawSpiral(centerX, centerY, mid, treble) {
-        this.ctx.strokeStyle = `hsl(${treble * 3}, 80%, 60%)`;
+    drawWaves(centerX, centerY, bass, mid, treble, config) {
+        // 波形パターン
+        this.ctx.strokeStyle = config.primaryColor + '60';
         this.ctx.lineWidth = 1;
-        this.ctx.beginPath();
         
-        for (let angle = 0; angle < Math.PI * 8; angle += 0.1) {
-            const radius = angle * 3 + mid * 0.1;
-            const x = centerX + Math.cos(angle + this.time) * radius;
-            const y = centerY + Math.sin(angle + this.time) * radius;
-            
-            if (angle === 0) {
-                this.ctx.moveTo(x, y);
-            } else {
-                this.ctx.lineTo(x, y);
-            }
-        }
-        
-        this.ctx.stroke();
-    }
-    
-    updateParticles(bass) {
-        // 新しいパーティクルを生成
-        if (bass > 50 && Math.random() < 0.3) {
-            for (let i = 0; i < 5; i++) {
-                this.particles.push({
-                    x: Math.random() * this.canvas.width,
-                    y: Math.random() * this.canvas.height,
-                    vx: (Math.random() - 0.5) * 4,
-                    vy: (Math.random() - 0.5) * 4,
-                    life: 1.0,
-                    size: Math.random() * 5 + 2,
-                    hue: Math.random() * 360
-                });
-            }
-        }
-        
-        // パーティクルを更新・描画
-        for (let i = this.particles.length - 1; i >= 0; i--) {
-            const particle = this.particles[i];
-            
-            particle.x += particle.vx;
-            particle.y += particle.vy;
-            particle.life -= 0.02;
-            
-            if (particle.life <= 0) {
-                this.particles.splice(i, 1);
-                continue;
-            }
-            
-            this.ctx.save();
-            this.ctx.globalAlpha = particle.life;
-            this.ctx.fillStyle = `hsl(${particle.hue}, 100%, 60%)`;
+        for (let y = 0; y < this.canvas.height; y += 60) {
             this.ctx.beginPath();
-            this.ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
-            this.ctx.fill();
-            this.ctx.restore();
-        }
-    }
-    
-    drawWaveform() {
-        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
-        this.ctx.lineWidth = 2;
-        this.ctx.beginPath();
-        
-        const sliceWidth = this.canvas.width / this.dataArray.length;
-        let x = 0;
-        
-        for (let i = 0; i < this.dataArray.length; i++) {
-            const v = this.dataArray[i] / 128.0;
-            const y = v * this.canvas.height / 4 + 50;
-            
-            if (i === 0) {
-                this.ctx.moveTo(x, y);
-            } else {
-                this.ctx.lineTo(x, y);
+            for (let x = 0; x < this.canvas.width; x += 5) {
+                const waveY = y + Math.sin(x * 0.01 + this.time * 3) * (bass * 0.3 + 20);
+                
+                if (x === 0) {
+                    this.ctx.moveTo(x, waveY);
+                } else {
+                    this.ctx.lineTo(x, waveY);
+                }
             }
-            
-            x += sliceWidth;
+            this.ctx.stroke();
         }
-        
-        this.ctx.stroke();
     }
 }
 
